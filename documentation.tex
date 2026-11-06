@@ -1,0 +1,527 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,longtable,array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{listings}
+
+\definecolor{ink}{HTML}{101814}
+\definecolor{acid}{HTML}{79A11E}
+\definecolor{paper}{HTML}{F3F0E7}
+\definecolor{blue}{HTML}{3D7EA6}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=ink,
+  urlcolor=blue,
+  pdftitle={Profit-Yield Regime Monitor},
+  pdfauthor={Ishva Mehta}
+}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textsc{Profit-Yield Regime Monitor}}
+\rhead{\textsc{Technical Note}}
+\cfoot{\thepage}
+\setlength{\headheight}{14pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.65em}
+\setlist{leftmargin=1.5em,itemsep=0.35em}
+\renewcommand{\arraystretch}{1.2}
+
+\lstdefinestyle{code}{
+  language=Python,
+  backgroundcolor=\color{paper},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{acid},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  frame=single,
+  breaklines=true,
+  showstringspaces=false
+}
+
+\title{\vspace{-2em}
+{\Large\textsc{U.S. Capital Markets}}\\[0.7em]
+{\huge\bfseries Profit-Yield Regime Monitor}\\[0.5em]
+{\large Methodology, Implementation, and Interpretation}}
+\author{Ishva Mehta}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The Profit-Yield Regime Monitor studies the interaction between U.S. corporate
+profit growth and long-term Treasury yields. It uses public data from the U.S.
+Bureau of Economic Analysis and the Federal Reserve Bank of St. Louis to
+classify the market environment into one of four regimes. The project is
+built as a small, reproducible research exercise. The data sources, signal
+definitions, classification rule, and limitations are stated explicitly.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Research Question}
+
+The monitor addresses a simple question:
+
+\begin{quote}
+\emph{What does the joint direction of corporate profit growth and long-term
+government bond yields imply about the current market regime?}
+\end{quote}
+
+Rising profits are usually associated with stronger economic activity and
+support for equities. Rising long-term yields can signal stronger nominal
+growth, higher inflation risk, tighter financial conditions, or a higher term
+premium. The two signals should therefore be interpreted together.
+
+The project does not forecast security returns. It organizes two observable
+signals into a weekly market note.
+
+\section{Why Use a Public Earnings Proxy}
+
+\subsection{Target concept}
+
+Analyst earnings revisions are useful because they measure changes in
+forward-looking expectations. High-quality historical estimate data are
+usually supplied by commercial vendors. A public GitHub project should not
+assume access to proprietary data.
+
+\subsection{Selected proxy}
+
+The monitor uses Corporate Profits After Tax from the Bureau of Economic
+Analysis, available through FRED as series \texttt{CP}. This series is:
+
+\begin{itemize}
+  \item public;
+  \item quarterly;
+  \item seasonally adjusted at an annual rate;
+  \item available from 1947; and
+  \item revised as national accounts are updated.
+\end{itemize}
+
+The proxy measures realized, economy-wide profits. It is not equivalent to
+forward-looking S\&P 500 analyst estimates. The distinction is shown directly
+in the application and README.
+
+\subsection{Trade-off}
+
+\begin{longtable}{p{0.29\textwidth}p{0.29\textwidth}p{0.29\textwidth}}
+\toprule
+& \textbf{Analyst estimates} & \textbf{BEA proxy} \\
+\midrule
+\endhead
+Orientation & Forward-looking & Realized \\
+Coverage & Listed index companies & U.S. corporations \\
+Frequency & Frequent revisions & Quarterly \\
+History & Vendor-dependent & Public history from 1947 \\
+Revisions & Forecast changes & National-account revisions \\
+Use in this project & Target concept & Implemented signal \\
+\bottomrule
+\end{longtable}
+
+\section{Data}
+
+\subsection{Series}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Series} & \textbf{Description} & \textbf{Frequency} \\
+\midrule
+\texttt{CP} & Corporate profits after tax & Quarterly \\
+\texttt{DGS10} & 10-year Treasury yield & Daily \\
+\texttt{DGS2} & 2-year Treasury yield & Daily \\
+\texttt{T10YIE} & 10-year breakeven inflation & Daily \\
+\bottomrule
+\end{tabular}
+\caption{Public FRED series used by the monitor}
+\end{table}
+
+The app downloads each series from FRED's public CSV endpoint. It does
+not require an API key.
+
+\subsection{Frequency alignment}
+
+Treasury and breakeven data are converted to weekly Friday observations using
+the last available value. Quarterly profit observations are carried forward
+until a new observation becomes available. This creates a weekly table while
+preserving the quarterly frequency of the profit signal.
+
+The resulting weekly date does not mean profit data were updated that week. It
+means the latest available quarterly profit observation was used for that
+week's classification.
+
+\section{Signal Construction}
+
+\subsection{Profit growth}
+
+Year-over-year corporate profit growth is:
+
+\[
+g_t = 100\left(\frac{CP_t}{CP_{t-4}}-1\right).
+\]
+
+Profit acceleration is the change in year-over-year growth:
+
+\[
+a_t = g_t-g_{t-1}.
+\]
+
+The profit signal is:
+
+\[
+P_t =
+\begin{cases}
+\text{accelerating}, & a_t>0,\\
+\text{decelerating}, & a_t\leq0.
+\end{cases}
+\]
+
+This signal measures whether the growth rate of profits is improving, not
+whether the level of profits is positive.
+
+\subsection{Yield trend}
+
+Let $y_t^{10}$ be the 10-year Treasury yield and let $L$ be the selected
+lookback in weeks. The change is:
+
+\[
+\Delta y_t^{10}=100\left(y_t^{10}-y_{t-L}^{10}\right)
+\]
+
+in basis points. The yield signal is:
+
+\[
+Y_t =
+\begin{cases}
+\text{rising}, & \Delta y_t^{10}>0,\\
+\text{falling}, & \Delta y_t^{10}\leq0.
+\end{cases}
+\]
+
+The default lookback is 13 weeks. The app also offers 4-, 8-, and
+26-week windows.
+
+\subsection{Supporting indicators}
+
+The 2s10s curve slope is:
+
+\[
+\mathrm{Slope}_t=100\left(y_t^{10}-y_t^{2}\right)
+\]
+
+in basis points. A positive value indicates a conventional upward-sloping
+curve.
+
+The 10-year breakeven rate is displayed as a market measure of average
+inflation compensation over the next decade. Neither supporting indicator
+changes the regime classification in version 0.1.
+
+\section{Four-Regime Framework}
+
+\begin{longtable}{p{0.17\textwidth}p{0.13\textwidth}p{0.25\textwidth}p{0.27\textwidth}}
+\toprule
+\textbf{Profits} & \textbf{10Y yield} & \textbf{Regime} &
+\textbf{Interpretation} \\
+\midrule
+\endhead
+Accelerating & Rising &
+Structural growth / higher cost of capital &
+Nominal growth is stronger, but discount rates and the cost of capital are
+also rising. \\
+Accelerating & Falling &
+Risk-on easing &
+Profit momentum is improving while financial conditions become more
+supportive. \\
+Decelerating & Rising &
+Margin pressure / stagflation risk &
+Profit momentum is weakening while discount rates remain under upward
+pressure. \\
+Decelerating & Falling &
+Cyclical slowdown &
+Both profit momentum and long-term yields point toward slower nominal growth. \\
+\bottomrule
+\end{longtable}
+
+The classification rule is intentionally deterministic:
+
+\begin{lstlisting}[style=code]
+def classify_regime(profits_accelerating, yields_rising):
+    if profits_accelerating and yields_rising:
+        return "Structural growth / higher cost of capital"
+    if profits_accelerating:
+        return "Risk-on easing"
+    if yields_rising:
+        return "Margin pressure / stagflation risk"
+    return "Cyclical slowdown"
+\end{lstlisting}
+
+\section{Processing Pipeline}
+
+The calculation runs in the following order:
+
+\begin{enumerate}
+  \item Download the four FRED CSV files.
+  \item Parse dates and convert values to numeric observations.
+  \item Calculate quarterly year-over-year profit growth.
+  \item Calculate the quarterly change in profit growth.
+  \item Resample the daily rate series to weekly Friday observations.
+  \item Carry the latest quarterly profit signal into the weekly table.
+  \item Calculate the lookback change in the 10-year yield.
+  \item Calculate the 2s10s slope.
+  \item Classify every week into a regime.
+  \item Display the current regime and historical series.
+\end{enumerate}
+
+\section{Application Design}
+
+\subsection{Interface}
+
+The Streamlit application contains:
+
+\begin{itemize}
+  \item a sidebar for chart history and yield lookback;
+  \item a current-regime card with a short interpretation;
+  \item five metric cards;
+  \item a dual-axis historical chart;
+  \item colored background bands showing past regimes;
+  \item a table of recent weekly observations;
+  \item a CSV download; and
+  \item an expandable methodology note.
+\end{itemize}
+
+\subsection{Chart}
+
+The chart places year-over-year corporate profit growth on the left axis and
+the 10-year Treasury yield on the right axis. Background color indicates the
+classified regime.
+
+The two axes have different units and should not be compared by vertical
+distance. The chart is intended to show direction, turning points, and regime
+transitions.
+
+\subsection{Caching}
+
+Downloaded data are cached for one hour:
+
+\begin{lstlisting}[style=code]
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_history(lookback_weeks):
+    data = load_market_data()
+    return build_history(...)
+\end{lstlisting}
+
+Caching reduces repeated network requests when a user changes a display
+control.
+
+\section{Repository Structure}
+
+\begin{verbatim}
+profit-yield-regime-monitor/
+|-- app.py
+|-- regime_monitor/
+|   |-- __init__.py
+|   |-- data.py
+|   |-- event_study.py
+|   +-- signals.py
+|-- tests/
+|   +-- test_signals.py
+|-- .streamlit/config.toml
+|-- .github/workflows/tests.yml
+|-- requirements.txt
+|-- pyproject.toml
+|-- README.md
++-- documentation.tex
+\end{verbatim}
+
+\texttt{data.py} handles downloads, while \texttt{signals.py} handles the
+classification. The event calculations live in
+\texttt{event\_study.py}. Presentation stays in \texttt{app.py}. This
+separation allows the analytical logic to be tested without running Streamlit
+or making a network request.
+
+\section{Running the Project}
+
+\begin{lstlisting}[style=code,language=bash,numbers=none]
+git clone <repository-url>
+cd profit-yield-regime-monitor
+python -m venv .venv
+
+# macOS or Linux
+source .venv/bin/activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+streamlit run app.py
+\end{lstlisting}
+
+Streamlit normally opens at \url{http://localhost:8501}.
+
+\section{Testing}
+
+Run:
+
+\begin{lstlisting}[style=code,language=bash,numbers=none]
+python -m unittest discover -s tests -v
+\end{lstlisting}
+
+The tests cover:
+
+\begin{description}[style=nextline]
+\item[Four regime combinations]
+Confirms that each pair of Boolean signals maps to the expected regime.
+
+\item[Signal calculations]
+Uses synthetic quarterly profits and daily rates to check positive yield
+change, curve slope, and the resulting regime.
+
+\item[Empty input]
+Confirms that requesting a snapshot from an empty history raises an error.
+
+\item[Event dates and summaries]
+Checks that only regime-entry dates become events and that the grouped sample
+counts agree with the event-level data.
+\end{description}
+
+GitHub Actions runs the same tests on every push and pull request.
+
+\section{Interpreting the Output}
+
+\subsection{Structural growth / higher cost of capital}
+
+This regime does not mean that higher yields are harmless for equities. It
+means the profit and yield signals may share a common source, such as stronger
+nominal activity, supply constraints, or investment demand. Equity outcomes
+still depend on whether earnings growth is sufficient to offset higher
+discount rates.
+
+\subsection{Risk-on easing}
+
+Improving profit momentum and falling yields are jointly supportive. The
+classification does not distinguish falling yields caused by lower inflation
+from those caused by concern about future growth. Breakevens and the yield
+curve provide additional context.
+
+\subsection{Margin pressure / stagflation risk}
+
+This is the least favorable combination in this classification. Slower profit growth
+reduces fundamental support while rising yields increase discount rates. The
+label describes a signal combination, not a formal stagflation forecast.
+
+\subsection{Cyclical slowdown}
+
+Falling yields can support valuations, but decelerating profits point to weaker
+activity. The net asset-price effect is not predetermined.
+
+\section{Event Study}
+
+The dashboard includes a short event study to check what followed each regime
+in the available ETF history. An event occurs only when the regime label
+changes. This avoids treating every week in a long regime as an independent
+observation.
+
+For asset $j$, event date $t$, and a 13-week horizon, the forward price return is
+
+\[
+R_{j,t}^{(13)} = 100\left(\frac{P_{j,t+13}}{P_{j,t}}-1\right).
+\]
+
+The two assets are SPY, used as a U.S. equity proxy, and TLT, used as a
+long-duration Treasury proxy. Daily adjusted closes are downloaded from Yahoo
+Finance and resampled to Friday observations. For each regime and asset, the app
+reports the number of events, median return, mean return, standard deviation,
+and share of positive returns.
+
+The chart uses the median because a few large market moves can pull the mean
+away from a typical event. The event count is shown with the result; small
+groups should not be read as stable estimates.
+
+This exercise is descriptive. It does not include transaction costs and relies
+on the latest vintage of the revised profit series. Regimes may also overlap in their 13-week outcome
+windows when signals change quickly. The results are a historical check on the
+classification, not evidence of a trading strategy.
+
+\section{Limitations}
+
+\begin{enumerate}
+  \item \textbf{The profit proxy is backward-looking.} BEA profits do not
+  measure analyst revisions.
+  \item \textbf{Mixed frequencies create stale signals.} The profit signal
+  changes quarterly while yields change daily.
+  \item \textbf{Data are revised.} Historical classifications may change after
+  BEA revisions.
+  \item \textbf{The thresholds are binary.} A one-basis-point yield change and
+  a large yield move receive the same direction label.
+  \item \textbf{The lookback is selected by the user.} Different windows can
+  produce different regimes.
+  \item \textbf{No asset-return forecast is estimated.} The labels are market
+  descriptions, not trading signals.
+  \item \textbf{The model is U.S.-focused.} Global profit, currency, and
+  policy differences are not included.
+  \item \textbf{The event study uses ETF adjusted closes.} The sample begins
+  with available ETF data and depends on a third-party price source.
+  \item \textbf{Event windows can overlap.} Closely spaced regime changes do
+  not produce statistically independent observations.
+\end{enumerate}
+
+\section{Possible Extensions}
+
+The project can remain compact while adding one extension at a time:
+
+\begin{itemize}
+  \item add neutral zones around zero to reduce frequent switching;
+  \item report regime persistence and transition counts;
+  \item compare 4-, 13-, and 26-week event horizons;
+  \item add a real-yield series;
+  \item compare BEA profits with a user-supplied analyst-estimate CSV; or
+  \item record data vintages to study the effect of revisions.
+\end{itemize}
+
+\section{Data Sources}
+
+\begin{itemize}
+  \item U.S. Bureau of Economic Analysis, Corporate Profits:
+  \href{https://www.bea.gov/data/income-saving/corporate-profits}{BEA corporate profits page}
+  \item FRED Corporate Profits After Tax:
+  \href{https://fred.stlouisfed.org/series/CP}{FRED series CP}
+  \item FRED 10-Year Treasury Yield:
+  \href{https://fred.stlouisfed.org/series/DGS10}{FRED series DGS10}
+  \item FRED 2-Year Treasury Yield:
+  \href{https://fred.stlouisfed.org/series/DGS2}{FRED series DGS2}
+  \item FRED 10-Year Breakeven Inflation:
+  \href{https://fred.stlouisfed.org/series/T10YIE}{FRED series T10YIE}
+  \item Yahoo Finance Historical Prices:
+  \href{https://finance.yahoo.com/}{Yahoo Finance}
+\end{itemize}
+
+\section{Conclusion}
+
+The monitor is deliberately narrow. It takes one question from market
+commentary---how profits and yields are moving relative to one another---and
+turns it into two explicit signals. The result is easy to reproduce and easy
+to disagree with. Every judgment is visible, from the earnings proxy to the
+13-week yield window.
+
+\vfill
+\begin{center}
+\fcolorbox{acid}{paper}{
+\parbox{0.87\textwidth}{
+\centering
+\textbf{Disclaimer}\\
+For research only. Data may be revised. This project does
+not provide investment advice.
+}}
+\end{center}
+
+\end{document}

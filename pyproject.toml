@@ -1,0 +1,11 @@
+[project]
+name = "profit-yield-regime-monitor"
+version = "0.1.0"
+description = "A public-data monitor for U.S. corporate profit growth and Treasury yields"
+authors = [{ name = "Ishva Mehta" }]
+requires-python = ">=3.11"
+dependencies = ["pandas>=2.2,<3", "plotly>=5.24,<7", "streamlit>=1.40,<2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
