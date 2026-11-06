@@ -44,7 +44,7 @@ domestic corporate sector, arrives quarterly, and is revised.
 ## Run locally
 
 ~~~bash
-git clone <repository-url>
+git clone <profit-yield-regime-monitor>
 cd profit-yield-regime-monitor
 python -m venv .venv
 
