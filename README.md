@@ -7,7 +7,7 @@ and the direction of the 10-year Treasury yield. I built it after reading
 BlackRock Investment Institute's weekly commentary, which often puts growth
 and rates on the same page.
 
-The model classifies each week into one of four regimes:
+The model classifies each week into 1 of 4 regimes:
 
 | Profit growth | 10Y yield | Regime |
 |---|---|---|
